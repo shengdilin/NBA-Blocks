@@ -1,0 +1,273 @@
+---
+output:
+  pdf_document: default
+  html_document: default
+---
+```{r include = FALSE}
+hook_chunk = knitr::knit_hooks$get('chunk')
+ls.flag = rmarkdown::metadata$linestretch
+ls.flag = ifelse(is.null(ls.flag), TRUE, ls.flag != 1.5)
+
+if (!ls.flag){
+knitr::knit_hooks$set(chunk = function(x, options) {
+  regular_output = hook_chunk(x, options)
+  # add latex commands if chunk option singlespacing is TRUE
+  if (isTRUE(options$singlespacing)) sprintf("\\setstretch{1} \\small \n %s \n \\setstretch{1.5} \\normalsize", regular_output)
+  else regular_output
+})}
+
+knitr::opts_chunk$set(   # This is for later! Don't worry about it now. 
+  echo = FALSE,          # Don't show code.
+  warning = FALSE,       # Don't show warnings.
+  message = FALSE,       # Don't show messages (less serious warnings).
+  fig.align = "center",  # Center figures.
+  fig.width = 5,         # Size figures nicely by default
+  fig.height = 3,        # Size figures nicely by default
+  # dev = "cairo_pdf",     # Enable this to use custom fonts
+  singlespacing = TRUE   # Makes code single spaced and returns to 1.5
+)
+library(tidyverse)       # Load libraries you always use here.
+library(kableExtra)
+library(cowplot)
+library(nbastatR)
+library(ggplot2)
+library(magick)
+library(png)
+library(jpeg)
+library(plotly)
+library(readr)
+library(zoo)
+
+
+
+set.seed(18)             # Make random results reproducible
+theme_set(theme_bw())    # Uses clean ggplot2 theme
+```
+
+## Sunny Plot
+
+```{r}
+# Read in data
+overallData <- read_csv("data/overallData.csv")
+# generate a uniqeID for each event
+overallData$uniqueID <- paste0(overallData$GameID, ".", overallData$event.id)
+#generate a column to see if play is on rebounding team or not (and NA if ball)
+overallData <- overallData %>%
+  group_by(uniqueID) %>%
+  mutate(side = ifelse(rebounder == lastname, team_id, NA)) %>%
+  group_by(uniqueID) %>%
+  fill(side) %>%
+  group_by(uniqueID) %>%
+  fill(side, .direction = "up") %>%
+  group_by(uniqueID) %>%
+  mutate(teamIs = ifelse(side == team_id, "Rebounding", "Defending")) %>%
+  subset(select = -c(side))
+  
+
+```
+
+
+## Pitts Plot
+
+
+```{r}
+# How to read in data
+overallData <- read_csv("data/overallData.csv")
+
+# # get total number of rebounds in sample set
+totalReb <- overallData %>%
+          group_by(GameID)%>%
+          summarize(TotReb = n_distinct(event.id))
+
+sum(totalReb$TotReb)
+
+# plot showing the density of total rebounds per game
+ggplot(totalReb, aes(x=TotReb)) +
+  geom_density() +
+  ggtitle("Density of Total Rebounds Per Game") +
+  expand_limits(x = c(25, 95))
+
+# will eventually become table 1 in the report
+table1 <- data.frame(Date = c("10/30/15", "11/01/15", "11/02/15", "11/08/15",
+                              "11/09/15", "11/13/15", "11/13/15", "11/16/15",
+                              "11/19/15", "11/21/15", "11/25/15", "11/27/15",
+                              "11/28/15", "11/29/15", "12/04/15", "12/09/15",
+                              "12/13/15", "12/14/15", "12/18/15", "12/18/15",
+                              "12/20/15", "12/30/15", "12/30/15", "01/04/16",
+                              "01/06/16", "01/12/16", "01/15/16", "01/15/16"),
+                `Home Team` = c("Detoit Pistons", "Oklahoma City Thunder",
+                              "Philadelphia 76ers", "New York Knicks",
+                              "Los Angeles Clippers", "Chicago Bulls",
+                              "Memphis Grizzlies", "Philadelphia 76ers",
+                              "Los Angeles Clippers", "Orlando Magic",
+                              "Detroit Pistons", "Memphis Grizzlies",
+                              "Dallas Mavericks", "Toronto Raptors",
+                              "Washington Wizards", "Toronto Raptors",
+                              "Toronto Raptors", "Chicago Bulls",
+                              "Chicago Bulls", "Utah Jazz",
+                              "Miami Heat", "Charlotte Hornets",
+                              "Boston Celtics", "Oklahoma City Thunder",
+                              "Minnesota Timberwolves", "Los Angeles Lakers",
+                              "Brooklyn Nets", "New Orleans Pelicans"),
+                `Away Team` = c("Chicago Bulls","Denver Nuggets",
+                              "Cleveland Cavaliers", "Los Angeles Lakers",
+                              "Memphis Grizzlies", "Charlotte Hornets",
+                              "Portland Trail Blazers", "Dallas Mavericks",
+                              "Golden State Warriors", "Sacramento Kings",
+                              "Miami Heat", "Atlanta Hawks",
+                              "Denver Nuggets", "Phoenix Suns",
+                              "Phoenix Suns", "San Antonio Spurs",
+                              "Philadelphia 76ers", "Philadelphia 76ers",
+                              "Detroit Pistons", "Denver Nuggets",
+                              "Portland Trailblazers", "Los Angeles Clippers",
+                              "Los Angeles Lakers", "Sacramento Kings",
+                              "Denver Nuggets", "New Orleans Pelicans",
+                              "Portland Trail Blazers", "Charlotte Hornets"),
+                     `Total Rebounds` = c(83, 37, 46, 44, 48, 76, 44, 65,
+                                          46, 51, 51, 45, 39, 66, 51, 54,
+                                          76, 64, 83, 58, 60, 63, 71, 55,
+                                          74, 77, 45, 37))
+
+kable(table1, booktabs = FALSE)
+
+
+plot_rebound <- function(gameNum, reboundNum){
+  #Set theme and images
+theme_set(theme_cowplot())
+my_image <- readPNG("pictures/nba-court.png")
+  
+  id = totalReb[gameNum,]$GameID
+  
+  df <- overallData %>%
+    filter(GameID == id)
+  
+  df1 <- df[((11*(reboundNum - 1))+1):(11*reboundNum),] %>%
+    mutate(initials = case_when(lastname == "ball" ~ "ball", 
+                                TRUE ~ paste0(substr(firstname, 1,1), substr(lastname,1,1))))
+  
+  my_plot <- 
+  ggplot(data = df1, mapping = aes(x = x_loc, y = y_loc, color = team_id, label = initials)) + 
+  geom_point(size = 2) +
+  geom_text(aes(label=initials),hjust=0, vjust=0) +
+  scale_x_continuous(name="X-Location", limits=c(-2, 100),breaks=(c(seq(0,94,12),94))) +
+  scale_y_continuous(name="Y-Location", limits=c(-2, 55),breaks=seq(0,50,5)) +
+  coord_fixed(ratio = 1) +
+      scale_colour_continuous(guide = FALSE)
+  
+  
+  
+  final_plot <- ggdraw() +
+  draw_image(my_image, x = .02, y = 0.03, scale = 0.77) + 
+  draw_plot(my_plot)
+
+return(final_plot)
+  
+}
+
+plot_rebound(5, 22)
+
+```
+
+
+## Pitts Analysis
+
+```{r}
+df <- overallData %>%
+  filter(lastname == rebounder) %>%
+  filter(velocity < 50)
+
+ballData <- subset(overallData, lastname == "ball")
+playerData <- subset(overallData, lastname != "ball")
+
+pD = integer(0)
+count = 1
+for(i in 1:nrow(playerData)){
+  a <- i - 1
+  if(a %% 10 == 0 && a > 0){
+    count = count + 1
+  }
+pD[i] = sqrt((playerData$x_loc[i] - ballData$x_loc[count])^2 +
+  (playerData$y_loc[i] - ballData$y_loc[count])^2)
+}
+
+playerData$BallDis = pD
+ballData$BallDis = 0
+combined <- rbind(playerData, ballData)
+
+
+
+df1 <- combined %>%
+  filter(lastname == rebounder) %>%
+  filter(velocity < 50)
+
+mean(combined$BallDis)
+mean(df1$BallDis)
+
+mean(df1$velocity)
+
+View(df1)
+
+df2 <- df %>%
+  count(quarter)
+
+df3 <- df %>%
+  count(pointsMadeAfterRebound)
+
+mean(df$velocity)
+ggplot(df, aes(x=velocity)) + 
+  geom_density()
+
+mean(df$x_loc)
+ggplot(df, aes(x=x_loc)) + 
+  geom_density()
+
+
+mean(df$y_loc)
+ggplot(df, aes(x=y_loc)) + 
+  geom_density()
+
+
+mean(df$game_clock)
+ggplot(df, aes(x=game_clock)) + 
+  geom_density()
+
+mean(df$shot_clock)
+ggplot(df, aes(x=shot_clock)) + 
+  geom_density()
+
+
+points <- subset(combined, pointsMadeAfterRebound == 2)
+nopoints <- subset(combined, pointsMadeAfterRebound == 1)
+
+ggplot(points, aes(x=BallDis)) + 
+  geom_density()
+
+ggplot(nopoints, aes(x=BallDis)) + 
+  geom_density()
+
+mean(points$BallDis)
+mean(nopoints$BallDis)
+
+res <- wilcox.test(nopoints$BallDis,points$BallDis, exact = FALSE)
+
+res
+
+ggplot(points, aes(x=velocity)) + 
+  geom_density()
+
+ggplot(nopoints, aes(x=velocity)) + 
+  geom_density()
+
+mean(points$velocity)
+mean(nopoints$veloctiy)
+
+res <- wilcox.test(nopoints$velocity,points$velocity, 
+                   exact = FALSE, alternative = "greater")
+
+res
+
+```
+
+
+
+## Sunny Analysis

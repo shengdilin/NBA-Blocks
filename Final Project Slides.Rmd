@@ -1,0 +1,245 @@
+---
+title: "STAT375: NBA Player Position, Speed and Rebounding"
+author: "Sunny Lin, Michael Pitts"
+date: "5/27/2021"
+output: 
+  beamer_presentation:
+# For a few of these, you may want to change the top right logo color from white to black. Just CTRL/CMD + F "WhiteRGB.pdf" and replace it with "BlackPMS.pdf" in the code below. "beaver" + "CambridgeUS" (current combo) is one such example.
+# A FEW COLOR OPTIONS TO CHOOSE FROM (uncomment no more than one)
+    # color: "beaver"
+    # color: "crane"
+    # color: "seagull"
+    color: "seahorse"
+    # color: "wolverine"
+# A FEW THEMES TO CHOOSE FROM (uncomment no more than one)
+    # theme: "Antibes"
+    # theme: "Berlin"
+    # theme: "Boadilla"
+    theme: "CambridgeUS"
+    # theme: "Copenhagen"
+    # theme: "Darmstadt"
+    # theme: "Dresden"
+    # theme: "JuanLesPins"
+    # theme: "Luebeck"
+    # theme: "Madrid"
+    # theme: "Malmoe"
+    # theme: "Montpellier"
+    # theme: "PaloAlto"
+    # theme: "Rochester"
+    # theme: "Szeged"
+    fig_caption: yes
+    fig_height: 2.5
+    fig_width: 5
+    # incremental: false
+    keep_tex: false
+    pandoc_args: "--highlight-style=files/mcshanepdf.theme"
+bibliography: files/references.bib
+csl: files/ASA-McShane.csl
+nocite: | 
+  @Andruzzi2021, @Miller2017, @Patton2021, @shahSportVu
+classoption: "aspectratio=169"
+# "aspectratio=169" vs "aspectratio=169, handout" for presentation vs handout
+# urlcolor: blue  # currently has side effect of changing all outline links to red-ish hue
+header-includes: 
+ - \usepackage{epstopdf, tikz, graphicx, hyperref}
+ - \titlegraphic{\includegraphics[width=2cm]{files/AmherstCollege-Seal_PurplePMS.pdf}}
+ - \setbeamertemplate{headline}{}
+ - \addtobeamertemplate{frametitle}{}{\begin{tikzpicture}[remember picture,overlay]\node[anchor=north east,yshift=2.5pt] at (current page.north east) {\includegraphics[height=0.8cm]{files/AmherstCollege-Seal_WhiteRGB.pdf}};\end{tikzpicture}\vskip-16pt}
+ - \setbeamertemplate{footline}{\leavevmode\hbox{\begin{beamercolorbox}[wd=.5\paperwidth,ht=2.5ex,dp=1.125ex,leftskip=.3cm,rightskip=.3cm]{section in head/foot}\usebeamerfont{section in head/foot}\insertsectionhead\hfill\insertshortauthor\end{beamercolorbox}\begin{beamercolorbox}[wd=.5\paperwidth,ht=2.5ex,dp=1.125ex,leftskip=.3cm,rightskip=.3cm]{title in head/foot}\usebeamerfont{title in head/foot}\inserttitle\hfill\insertframenumber{} / \inserttotalframenumber\end{beamercolorbox}}\vskip0pt}
+ - \def\begincols{\begin{columns}}
+ - \def\begincol{\begin{column}}
+ - \def\endcol{\end{column}}
+ - \def\endcols{\end{columns}}
+ - \definecolor{codegray}{HTML}{f9f9f9}
+ - \definecolor{codeletter}{HTML}{002c6b}
+ - \let\textttOrig\texttt
+ - \renewcommand{\texttt}[1]{\textttOrig{\textbf{\textcolor{codeletter}{\colorbox{codegray}{#1}}}}}
+---
+
+# Introduction
+
+## **Introduction**
+
+<!-- LITERALLY NOTHING CAN BE TYPED BEFORE THE ## ABOVE -->
+
+<!-- Similarly, your setup chunk should appear no earlier than here -->
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(   # This is for later! Don't worry about it now. 
+  echo = FALSE,           # Don't show code.
+  warning = FALSE,       # Don't show warnings.
+  message = FALSE,       # Don't show messages (less serious warnings).
+  cache = FALSE,         # Set to TRUE to save results from last compilation.
+  fig.align = "center"   # Center figures.
+)
+library(tidyverse)       # Load libraries you always use here.
+library(tidymodels)
+library(ggplot2)
+library(knitr)
+library(kableExtra)
+library(latex2exp)
+
+set.seed(18) 
+```
+
+* SportVU data
+* Professional Teams
+
+
+
+
+```{r echo=FALSE, out.width='60%', fig.cap="2020 NBA Finals"}
+knitr::include_graphics("analysisRMDs/pictures/pic1.jpeg")
+```
+
+
+## **Research Questions**
+
+* How does one work with a large amount tracking data?
+* How does player position and speed at the moment of rebounding affect the probability of scoring points on the next play by the team that rebounded?
+* How does the average speed of players (hustle) on opposing teams affect whether the next play generates points or not at the moment of rebound?
+
+
+```{r echo=FALSE, out.width='60%', fig.cap="Tracking Data"}
+knitr::include_graphics("analysisRMDs/pictures/pic2.jpeg")
+```
+
+\vspace{.35in} <!-- this adds a bit of vertical space between the sections -->
+
+## **Data**
+
+* SportVU Data
+* `nbastatR`
+* 28 Ramdomly Sampled Games
+
+```{r echo=FALSE, out.width='48%', fig.cap="Density of Total Rebounds Per Game"}
+knitr::include_graphics("analysisRMDs/pictures/pic4.png")
+```
+
+
+## **Previous Work**
+
+* Miller's Possession Sketches
+* Andruzzi's Position and Speed
+
+```{r echo=FALSE, out.width='48%', fig.cap="Clustering Analysis Using Players Position and Speed"}
+knitr::include_graphics("analysisRMDs/pictures/pic3.png")
+```
+
+
+## **Initial Data Exploration**
+
+Detroit Pistons vs. Atlanta Hawks
+
+
+```{r echo=FALSE, out.width='60%', fig.cap="Movement of Bazemore and Ball for A Rebounding Event"}
+knitr::include_graphics("analysisRMDs/pictures/reboundExample.png")
+```
+
+## **More Data Exploration**
+
+Los Angeles Clippers vs. Memphis Grizzlies
+
+```{r echo=FALSE, out.width='60%', fig.cap="Player Positions at Time of a Rebound Event"}
+knitr::include_graphics("analysisRMDs/pictures/reboundExample2.png")
+```
+
+# Methods and Analysis
+
+## **Wilcoxon Rank Sum Tests**
+
+\begincols
+\begincol{.5\textwidth}
+
+```{r echo=FALSE, out.width='100%', fig.cap="Test Results for Position"}
+knitr::include_graphics("analysisRMDs/pictures/pic5.png")
+```
+
+\endcol
+\begincol{.5\textwidth}
+
+```{r echo=FALSE, out.width='100%', fig.cap="Test Results for Speed"}
+knitr::include_graphics("analysisRMDs/pictures/pic6.png")
+```
+
+\endcol
+\endcols
+
+## **Logistic Modeling**
+
+\begincols
+\begincol{.5\textwidth}
+
+```{r echo=FALSE, out.width='100%', fig.cap=""}
+knitr::include_graphics("analysisRMDs/pictures/defensive.png")
+```
+
+\endcol
+\begincol{.5\textwidth}
+
+```{r echo=FALSE, out.width='100%', fig.cap=""}
+knitr::include_graphics("analysisRMDs/pictures/rebounding.png")
+```
+
+\endcol
+\endcols
+
+## **Difference**
+
+```{r echo=FALSE, out.width='62%', fig.cap=""}
+knitr::include_graphics("analysisRMDs/pictures/difference.png")
+```
+
+## **Summary of Results**
+
+* Player distance to the ball did not a have a significant relationship with scoring points on the next play
+
+* Speed of all 10 distinct players on the court had a significant relationship with scoring points on the next play
+
+* Speed of players on the rebounding team did not translate to an increased likelihood of scoring on the next play
+
+* Greater average speed of the rebounding team as well as the greater the difference of average speed for the defending team over the rebounding team led to significant, but relatively small, decreases on probability of scoring for the rebounding team
+
+
+# Conclusion
+
+
+## **Data Wrangling Challenges**
+
+```{r echo=FALSE, out.width='70%', fig.cap="Big Data"}
+knitr::include_graphics("analysisRMDs/pictures/pic7.jpeg")
+```
+ 
+## **Limitations**
+
+* One season of data
+* Offensive and defensive rebounds were not distinguished
+* State of game during rebound varies widely
+
+```{r echo=FALSE, out.width='35%', fig.cap="Limitations"}
+knitr::include_graphics("analysisRMDs/pictures/pic9.jpeg")
+```
+
+## **Extensions**
+
+* Time left on shot clock and game
+* Movement of the ball right after the rebound
+
+```{r echo=FALSE, out.width='50%', fig.cap="Dame Time"}
+knitr::include_graphics("analysisRMDs/pictures/pic8.png")
+```
+
+# REFERENCES
+
+## Thank You
+
+Hope you enjoyed our presentation!
+
+
+<!-- don't delete and don't write below this line -->
+
+## References
+
+
+
+

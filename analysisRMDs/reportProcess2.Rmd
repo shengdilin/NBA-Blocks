@@ -1,0 +1,133 @@
+```{r include = FALSE}
+hook_chunk = knitr::knit_hooks$get('chunk')
+ls.flag = rmarkdown::metadata$linestretch
+ls.flag = ifelse(is.null(ls.flag), TRUE, ls.flag != 1.5)
+
+if (!ls.flag){
+knitr::knit_hooks$set(chunk = function(x, options) {
+  regular_output = hook_chunk(x, options)
+  # add latex commands if chunk option singlespacing is TRUE
+  if (isTRUE(options$singlespacing)) sprintf("\\setstretch{1} \\small \n %s \n \\setstretch{1.5} \\normalsize", regular_output)
+  else regular_output
+})}
+
+knitr::opts_chunk$set(   # This is for later! Don't worry about it now. 
+  echo = FALSE,          # Don't show code.
+  warning = FALSE,       # Don't show warnings.
+  message = FALSE,       # Don't show messages (less serious warnings).
+  fig.align = "center",  # Center figures.
+  fig.width = 5,         # Size figures nicely by default
+  fig.height = 3,        # Size figures nicely by default
+  dev = "cairo_pdf",     # Enable this to use custom fonts
+  singlespacing = TRUE   # Makes code single spaced and returns to 1.5
+)
+library(tidyverse)       # Load libraries you always use here.
+library(kableExtra)
+library(cowplot)
+library(nbastatR)
+library(ggplot2)
+library(magick)
+library(png)
+library(jpeg)
+library(plotly)
+library(readr)
+library(zoo)
+library(popbio)
+
+
+set.seed(18)             # Make random results reproducible
+theme_set(theme_bw())    # Uses clean ggplot2 theme
+```
+
+
+```{r}
+# Read in data
+overallData <- read_csv("data/overallData.csv")
+# generate a uniqeID for each event
+overallData$uniqueID <- paste0(overallData$GameID, ".", overallData$event.id)
+#generate a column to see if play is on rebounding team or not (and NA if ball)
+overallData <- overallData %>%
+  group_by(uniqueID) %>%
+  mutate(side = ifelse(rebounder == lastname, team_id, NA)) %>%
+  group_by(uniqueID) %>% 
+  fill(side) %>%
+  group_by(uniqueID) %>% 
+  fill(side, .direction = "up") %>%
+  group_by(uniqueID) %>% 
+  mutate(teamIs = ifelse(side == team_id, "Rebounding", "Defending")) %>%
+  subset(select = -c(side))
+
+```
+
+
+```{r}
+# start hustle analysis
+
+hustle <- overallData %>%
+  filter(player_id != -1) %>%
+  group_by(uniqueID, teamIs) %>%
+  summarise(averageSpeed = mean(velocity, na.rm = TRUE))
+
+hustle2 <- overallData %>%
+  filter(player_id != -1) %>%
+  group_by(uniqueID, teamIs) %>%
+  summarise(pointsNextPlay = pointsMadeAfterRebound) %>%
+  distinct() %>%
+  subset(select = -c(teamIs))
+
+hustleFinal <- inner_join(hustle, hustle2, by = "uniqueID") %>%
+  distinct() %>%
+  filter(averageSpeed < 20)
+hustleFinal$pointsNextPlay[hustleFinal$pointsNextPlay == 1] <- 0
+hustleFinal$pointsNextPlay[hustleFinal$pointsNextPlay == 2] <- 1
+
+hustleDefense <- hustleFinal %>%
+  filter(teamIs == "Defending")
+
+hustleRebound <- hustleFinal %>%
+  filter(teamIs == "Rebounding")
+
+hustleDifference <- hustleFinal %>% 
+  group_by(uniqueID) %>%
+  mutate(defendingMinusReboundingHustle = averageSpeed - averageSpeed[teamIs == "Rebounding"]) %>%
+  filter(teamIs == "Defending") %>%
+  subset(select = -c(teamIs, averageSpeed))
+```
+
+```{r}
+# ggplot(hustleDefense, aes(x = averageSpeed, y = pointsNextPlay)) +
+#   geom_point()
+```
+
+```{r}
+glm.fit.defense <- glm(pointsNextPlay ~ averageSpeed, data = hustleDefense, family = binomial)
+summary(glm.fit.defense)
+
+glm.fit.rebound <- glm(pointsNextPlay ~ averageSpeed, data = hustleRebound, family = binomial)
+summary(glm.fit.rebound)
+
+glm.fit.difference <- glm(pointsNextPlay ~ defendingMinusReboundingHustle, data = hustleDifference, family = binomial)
+summary(glm.fit.difference)
+```
+
+
+```{r}
+plot(hustleDefense$averageSpeed, hustleDefense$pointsNextPlay ,xlab="Average Speed (feet/second)",ylab="Probability of Points Made on Next Play", main = "Probability of Points Made on Next Play Based on Defensive Team", xlim = c(-100,100))
+curve(predict(glm.fit.defense,data.frame(averageSpeed=x),type="resp"),add=TRUE)
+logi.hist.plot(hustleDefense$averageSpeed, hustleDefense$pointsNextPlay,boxp=FALSE,type="hist",col="gray")
+
+# points(hustleDefense$averageSpeed,fitted(glm.fit.defense),pch=20)
+```
+
+```{r}
+plot(hustleRebound$averageSpeed, hustleRebound$pointsNextPlay ,xlab="Average Speed (feet/second)",ylab="Probability of Points Made on Next Play", ylim = c(0, 1), xlim = c(-600,600), main = "Probability of Points Made on Next Play Based on Rebounding Team")
+curve(predict(glm.fit.rebound,data.frame(averageSpeed=x),type="resp"),add=TRUE)
+logi.hist.plot(hustleRebound$averageSpeed, hustleRebound$pointsNextPlay,boxp=FALSE,type="hist",col="gray")
+#points(hustleRebound$averageSpeed,fitted(glm.fit.rebound),pch=20)
+```
+```{r}
+plot(hustleDifference$defendingMinusReboundingHustle, hustleDifference$pointsNextPlay ,xlab="Defensive Average Speed - Rebounding Average Speed (feet/second)",ylab="Probability of Points Made on Next Play", ylim = c(0, 1), xlim = c(-50,50), main="Probability of Points Made on Next Play Based on Difference")
+curve(predict(glm.fit.difference,data.frame(defendingMinusReboundingHustle=x),type="resp"),add=TRUE)
+#points(hustleRebound$averageSpeed,fitted(glm.fit.rebound),pch=20)
+logi.hist.plot(hustleDifference$defendingMinusReboundingHustle, hustleDifference$pointsNextPlay,boxp=FALSE,type="hist",col="gray")
+```

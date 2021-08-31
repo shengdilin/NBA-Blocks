@@ -1,0 +1,305 @@
+```{r include = FALSE}
+hook_chunk = knitr::knit_hooks$get('chunk')
+ls.flag = rmarkdown::metadata$linestretch
+ls.flag = ifelse(is.null(ls.flag), TRUE, ls.flag != 1.5)
+
+if (!ls.flag){
+knitr::knit_hooks$set(chunk = function(x, options) {
+  regular_output = hook_chunk(x, options)
+  # add latex commands if chunk option singlespacing is TRUE
+  if (isTRUE(options$singlespacing)) sprintf("\\setstretch{1} \\small \n %s \n \\setstretch{1.5} \\normalsize", regular_output)
+  else regular_output
+})}
+
+knitr::opts_chunk$set(   # This is for later! Don't worry about it now. 
+  echo = FALSE,          # Don't show code.
+  warning = FALSE,       # Don't show warnings.
+  message = FALSE,       # Don't show messages (less serious warnings).
+  fig.align = "center",  # Center figures.
+  fig.width = 5,         # Size figures nicely by default
+  fig.height = 3,        # Size figures nicely by default
+  dev = "cairo_pdf",     # Enable this to use custom fonts
+  singlespacing = TRUE   # Makes code single spaced and returns to 1.5
+)
+library(tidyverse)       # Load libraries you always use here.
+library(kableExtra)
+library(cowplot)
+library(nbastatR)
+library(ggplot2)
+library(magick)
+library(png)
+library(jpeg)
+library(plotly)
+library(readr)
+
+
+set.seed(18)             # Make random results reproducible
+theme_set(theme_bw())    # Uses clean ggplot2 theme
+```
+
+
+```{r}
+#CREATE FUNCTION FOR GENERATING DATAFRAME OF ONE REBOUND, WITH SPEED OF EACH PLAYER
+reboundPositions <- function(lastName, event_num, data) {
+clockinfo <- get_game_clock(lastName,event_num, data)
+playerdistance <- player_dist(lastName,"ball",event_num, data)
+
+if(nrow(clockinfo) != length(playerdistance) || nrow(clockinfo) == 0 || length(playerdistance) <= 1) {
+  #catch edge cases with missing data and return NULL
+  return(NULL)
+}
+ballDistanceFromRebounder <- data.frame(clockinfo, playerdistance) %>%
+  rename(player_distance = playerdistance) %>% 
+  arrange(game_clock)
+#find the positions of players when ball is < 3 feet away from rebounder
+timesUnder3 <- which(ballDistanceFromRebounder$player_distance < 3)
+
+#if the ball never gets within 3 feet of said rebounder, return NULL
+if(length(timesUnder3) == 0) {
+  return(NULL)
+}
+timeToReturn <- ballDistanceFromRebounder[timesUnder3[1],1]
+rowNums <- which(data$game_clock %in% timeToReturn & data$event.id %in% event_num)
+
+#create velocity from data around .2 seconds ahead
+dataToReturn <- data[rowNums[1]:(rowNums[1]+10),]
+dataToReturn2 <- data[(rowNums[1]+44):(rowNums[1]+54),]
+
+if(dataToReturn$event.id[1] != dataToReturn2$event.id[1]) {
+  #if not the same event, means event was too small so we should discard
+  return(NULL)
+}
+rebounded <- rbind(dataToReturn, dataToReturn2)
+rebounded <- rebounded %>% 
+  group_by(lastname) %>%
+  mutate(velocity = get_velocity(x_loc, y_loc, game_clock))
+# if(length(colnames(rebounded)) == 0 || "velocity" %in% colnames(rebounded) == FALSE) {
+#   print(colnames)
+#   return(NULL)
+# }
+rebounded <- rebounded[!duplicated(rebounded$lastname),]
+
+#return dataframe at time where ball is first shown to be < 3 feet away from rebounder
+return(rebounded)
+}
+```
+
+
+
+```{r}
+# GENERATE A DATAFRAME THAT HAS REBOUND DATA FOR ENTIRE GAME
+# takes in gameID (entered as string) and returns a dataframe of all rebounds; this dataframe has:
+# event.id, player_id, lastname, firstname, position, team_id, x_loc, y_loc, radius (ball only), game_clock
+# shot_clock, quarter --> and some other columns we added as well:
+# 1. pointsMadeAfterRebound: returns 2 if the next play generates points
+#    and 1 if the next play does not generate points
+# 2. homeOrVisitor: returns 2 if the visitor team rebounds 
+#    and 1 if the home team rebounds
+# 3. rebounder: last name of the person who rebounded for the event according to play-by-play data
+# 4. velocity: which is, in reality, the speed of the given player derived from the SPORTVU data
+#    starting from the moment of the "rebound" to around 0.2 seconds afterwards
+
+getReboundData <- function(gameID) {
+# IMPORTING SPORTVU DATA
+#download functions.R file to help with sportVu data
+source("_functions.R")
+
+#download sportVu data for a certain game
+fileName <- paste0(gameID,".json")
+all.movements <- sportvu_convert_json(file = fileName) %>% 
+  select(-jersey)
+
+# IMPORTING AND MANIPULATING PLAY BY PLAY DATA FOR JUST REBOUNDS
+
+#get play by play data for game
+pbp <- play_by_play(gameID)
+
+#create a rebounds dataset
+rebounds <- pbp %>% 
+  select(numberEvent, numberEventMessageType, descriptionPlayHome, descriptionPlayVisitor) %>%
+  # 2 if the next play creates a point, else returns 1
+  mutate(pointsMadeAfterRebound = ifelse(numberEventMessageType == 4 & !is.na(lead(pbp$marginScore, default = last(pbp$marginScore))), 2, ifelse(numberEventMessageType == 4, 1, 0))) %>%
+  # filter for all rebounds
+  filter(numberEventMessageType == 4) %>%
+  #if home rebound, value is equal to 1 and if visitor rebound, value is 2
+  mutate(homeOrVisitor = ifelse(is.na(descriptionPlayHome), 2, ifelse(is.na(descriptionPlayVisitor), 1, 0))) %>%
+  rename(event.id = numberEvent) %>%
+  mutate(rebounder = ifelse(is.na(descriptionPlayHome), sub("([A-Za-z]+).*", "\\1", descriptionPlayVisitor), ifelse(is.na(descriptionPlayVisitor), sub("([A-Za-z]+).*", "\\1", descriptionPlayHome), 0))) %>% 
+  subset(select = -c(descriptionPlayVisitor, descriptionPlayHome))
+
+
+# MERGE SPORTVU AND REBOUNDS PLAY BY PLAY DATA
+#merge our rebounds play by play data with the sportVu data
+rebound.movements = all.movements %>% filter(event.id %in% rebounds$event.id) %>%
+  merge(y = rebounds, by = "event.id", all.x = TRUE) %>%
+  subset(select = -c(numberEventMessageType))
+#ensure rebound.movements is ordered correctly
+rebound.movements <- rebound.movements[order(rebound.movements$event.id,-rebound.movements$game_clock),]
+
+# GET DISTINCT REBOUNDS IN ORDER TO SEARCH FOR PLAYER POSITIONS AND VELOCITY ON EACH REBOUND
+# (WE DEFINE THE REBOUND MOMENT AS THE MOMENT THAT THE BALL IS < 3 FEET AWAY FROM THE REBOUNDER AS DECLARED IN PLAY BY PLAY)
+#get distinct Rebounds
+distinctRebounds <- rebound.movements[!duplicated(rebound.movements$event.id),] %>%
+  select(event.id, rebounder) 
+#take away all team rebounds (not assigned to player)
+distinctRebounds <- distinctRebounds[!grepl("^[[:upper:]]+$",distinctRebounds$rebounder),, drop = FALSE]
+
+
+#start generating dataframe of all rebounds
+df <- reboundPositions(distinctRebounds[1,2], distinctRebounds[1,1], rebound.movements)
+for(row in 2:nrow(distinctRebounds)) {
+  toAppend <- try(reboundPositions(distinctRebounds[row,2], distinctRebounds[row,1], rebound.movements), silent=TRUE)
+  if ('try-error' %in% class(toAppend)) next
+  else df <- rbind(df, toAppend)
+}
+#return dataframe
+return(df)
+}
+
+#test on certain games
+df <- getReboundData("0021500001")
+df1 <- getReboundData("0021500504")
+```
+
+---------DONT RUN CODE BELOW----------------
+1 time only and I've already done it. Just keeping it in here in case he asks how we generated the random sample
+
+```{r, eval = FALSE, echo = FALSE}
+#Code to randomly sample our data, only need to do it one time
+
+# there are 637 games in our dataset so the code below randomly picks 32 of those games for our sample set
+#test on certain games
+
+
+# set.seed(1)
+# listedfiles <- list.files("SportVULogs")
+# num_files <- length(listedfiles)
+# vec <- sample(x = num_files, size = 32, replace = FALSE)
+# 
+# listedfiles2 <- c(listedfiles[vec[1:32]])
+# 
+# for(i in 1:length(listedfiles2)){
+#   path = paste0("SportVULogs/", listedfiles2[i])
+#   file.copy(path, "SportVULogs2")
+# }
+
+
+## code to get all of our data into one dataframe- only need to do it once
+
+# files <- list.files(path="SportVULogs2/")
+# 
+# df2 <- integer(0)
+# 
+# for(i in 1:length(files)){
+#   name <- substr(files[i], 1, nchar(files[i]) - 5)
+#   df <- getReboundData(name)
+#   if(i == 1){
+#     df2 <- df
+#   }
+#   else{
+#     df2 <- rbind(df2, df)
+#   }
+# }
+
+```
+
+----------------DON'T RUN CODE ABOVE-----------------------
+
+
+# Some Exploratory Analysis of our Sample Set
+
+
+```{r}
+# CREATE FUNCTION FOR PLOTTING
+plot_event <- function(player_num, event_num, data) {
+#Set theme and images
+theme_set(theme_cowplot())
+my_image <- readPNG("pictures/nba-court.png")
+
+#filter the data from specifications
+data_filtered = filter(data, event.id == event_num & player_id == player_num) 
+player_name = as.character(data_filtered$lastname[1])
+
+#create plot instance
+my_plot <- 
+  ggplot(data = data_filtered, mapping = aes(x = x_loc, y = y_loc)) + 
+  # geom_point(alpha = 0.7) +
+  geom_path(aes(color = game_clock), arrow = arrow(ends = "first", length = unit(0.04, "inches"))) +
+  scale_x_continuous(name="X-Location", limits=c(0, 94),breaks=(c(seq(0,94,12),94))) +
+  scale_y_continuous(name="Y-Location", limits=c(0, 50),breaks=seq(0,50,5)) +
+  coord_fixed(ratio = 1) + 
+  scale_color_gradient(low = "green", high = "blue")
+
+return(my_plot)
+}
+
+#create other plot function (trying to add two on top of other plot)
+plot_other_event <- function(player_num, event_num, data) {
+#Set theme and images
+theme_set(theme_cowplot())
+my_image <- readPNG("pictures/nba-court.png")
+
+#filter the data from specifications
+data_filtered = filter(data, event.id == event_num & player_id == player_num) 
+player_name = as.character(data_filtered$lastname[1])
+
+#create plot instance
+my_plot <- 
+  ggplot(data = data_filtered, mapping = aes(x = x_loc, y = y_loc, color = game_clock)) + 
+  geom_path(aes(color = game_clock), arrow = arrow(ends = "first", length = unit(0.04, "inches"))) +
+  scale_x_continuous(name="X-Location", limits=c(0, 94),breaks=(c(seq(0,94,12),94))) +
+  scale_y_continuous(name="Y-Location", limits=c(0, 50),breaks=seq(0,50,5)) +
+  coord_fixed(ratio = 1) +
+  ggtitle(paste0("Movement of Bazemore & Ball for Event ", event_num)) + 
+  scale_color_gradient(low = "orange", high = "red")
+
+return(my_plot)
+}
+```
+
+
+```{r}
+# PLOT EXAMPLES 
+# Create plot for playter Bazemore for event 3
+all.movements <- sportvu_convert_json(file = "data/0021500001.json") %>% 
+  select(-jersey)
+#get play by play data for game
+pbp <- play_by_play(0021500001)
+#create a rebounds dataset
+rebounds <- pbp %>% 
+  select(numberEvent, numberEventMessageType, descriptionPlayHome, descriptionPlayVisitor) %>%
+  # 2 if the next play creates a point, else returns 1
+  mutate(pointsMadeAfterRebound = ifelse(numberEventMessageType == 4 & !is.na(lead(pbp$marginScore, default = last(pbp$marginScore))), 2, ifelse(numberEventMessageType == 4, 1, 0))) %>%
+  # filter for all rebounds
+  filter(numberEventMessageType == 4) %>%
+  #if home rebound, value is equal to 1 and if visitor rebound, value is 2
+  mutate(homeOrVisitor = ifelse(is.na(descriptionPlayHome), 2, ifelse(is.na(descriptionPlayVisitor), 1, 0))) %>%
+  rename(event.id = numberEvent) %>%
+  mutate(rebounder = ifelse(is.na(descriptionPlayHome), sub("([A-Za-z]+).*", "\\1", descriptionPlayVisitor), ifelse(is.na(descriptionPlayVisitor), sub("([A-Za-z]+).*", "\\1", descriptionPlayHome), 0))) %>% 
+  subset(select = -c(descriptionPlayVisitor, descriptionPlayHome))
+# MERGE SPORTVU AND REBOUNDS PLAY BY PLAY DATA
+#merge our rebounds play by play data with the sportVu data
+rebound.movements = all.movements %>% filter(event.id %in% rebounds$event.id) %>%
+  merge(y = rebounds, by = "event.id", all.x = TRUE) %>%
+  subset(select = -c(numberEventMessageType))
+#ensure rebound.movements is ordered correctly
+rebound.movements <- rebound.movements[order(rebound.movements$event.id,-rebound.movements$game_clock),]
+
+
+my_image <- readPNG("pictures/nba-court.png")
+# Create plot for Bazemore for event 3
+Bazemore3Plot <- plot_event(203145,3,all.movements)
+# Create plot for ball for event 3
+ball3Plot <- plot_other_event(-1, 3, all.movements)
+# #create plot for player Jackson for event 9
+# plot_event(202704,9,all.movements)
+# #create plot for ball for event 9
+# plot_event(-1,9,all.movements)
+
+#draw plot
+ggdraw() +
+  draw_image(my_image, x = -0.05, y = 0.02, scale = 0.68) + 
+  draw_plot(ball3Plot) +
+  draw_plot(Bazemore3Plot, y = -0.032) 
+  
+```
