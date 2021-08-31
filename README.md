@@ -1,32 +1,41 @@
-# Final-Project
+# NBA - Blocks
 
-Add all of your code and work here as necessary. 
+Examining the impact of Blocks on Defense and overall plays using SportVu data on NBA gameplay.
 
+## Useful links:
 
-## Files to Keep in the Main Directory (please keep this naming convention)
+### Data and Functions to read in data
 
-* `.gitignore` 
-* `LICENSE`
-* `README.md`
-* `Final Project Report.rmd`
-* **`Final-Project-Report.pdf`**
-* `Final Project Slides.rmd`
-* **`Final-Project-Slides.pdf`**
+1. https://github.com/rajshah4/BasketballData (Where we receive data)
 
-I will be re-knitting your `.pdf`s to make sure they work (this is part of the grading). 
+2. https://github.com/rajshah4/NBA_SportVu (Where we get functions to read in data)
 
-## Files to Move to `files/` or another folder of your creation
+3. https://github.com/karimi-ali/NBA_SportVu (Helped fix bug in link 2)
 
-* `references.bib` (or whatever you name this) (you'll need to change the name in the `.rmd`s to be `"files/references.bib"`
-* Any paper you reference. In fact, all papers you reference should be in this directory
-* The [font you pick for your report](https://fonts.google.com/?category=Serif,Sans+Serif)
-* Any data you've imported or temporarily saved (again, change the pointer be `"files/..."`)
-* Any pictures, etc, that are necessary to knit your documents
-* Any `R` scripts you've written to pre-process data
-* Basically anything that isn't in the first section. Let me know if there's something you think _should_ be in the main directory. 
+4. http://projects.rajivshah.com/sportvu/EDA_NBA_SportVu.html (Some Data Exploration)
 
+5. http://projects.rajivshah.com/sportvu/PBP_NBA_SportVu.html (Play-by-Play merging)
 
-## Files to Delete
+6. https://twitter.com/jonaslindeloev/status/1386472977982705667?s=19 (How to run code and work in R at same time)
 
-* Any old versions of the final report or final slides
-* Anything that you didn't actually use in your analysis
+### Papers/Projects that Were Read
+
+7. http://savvastjortjoglou.com/nba-play-by-play-movements.html
+
+8. https://global-uploads.webflow.com/5f1af76ed86d6771ad48324b/5fee0b0aff37459135505f4a_Possession%20Sketches%20Mapping%20NBA%20Strategies.pdf
+
+9. https://www.kaggle.com/jdruzzi/defender-evaluation-one-cut-routes-double-moves (https://www.nfl.com/watch/show/big-data-bowl is the 5-minute talk)
+
+The following are from the MIT SLOAN Conference
+
+10. https://www.sloansportsconference.com/research-papers/predicting-nba-talent-from-enormous-amounts-of-college-basketball-tracking-data
+
+11. https://www.sloansportsconference.com/research-papers/routine-inspection-a-playbook-for-corner-kicks
+
+12. https://www.sloansportsconference.com/research-papers/using-deep-learning-to-understand-patterns-of-player-movement-in-the-nba
+
+13. https://www.sloansportsconference.com/research-papers/bhostgusters-realtime-interactive-play-sketching-with-synthesized-nba-defenses
+
+https://www.sloansportsconference.com/research-papers/learning-feature-representations-from-football-tracking
+
+https://www.sloansportsconference.com/research-papers/deepqb-deep-learning-with-player-tracking-to-quantify-quarterback-decision-making-performance
