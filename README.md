@@ -26,7 +26,7 @@ Examining the impact of Blocks on Defense and overall plays using SportVu data o
 
 9. https://www.kaggle.com/jdruzzi/defender-evaluation-one-cut-routes-double-moves (https://www.nfl.com/watch/show/big-data-bowl is the 5-minute talk)
 
-The following are from the MIT SLOAN Conference
+The following are readings from the MIT SLOAN Conference
 
 10. https://www.sloansportsconference.com/research-papers/predicting-nba-talent-from-enormous-amounts-of-college-basketball-tracking-data
 
@@ -36,6 +36,6 @@ The following are from the MIT SLOAN Conference
 
 13. https://www.sloansportsconference.com/research-papers/bhostgusters-realtime-interactive-play-sketching-with-synthesized-nba-defenses
 
-https://www.sloansportsconference.com/research-papers/learning-feature-representations-from-football-tracking
+14. https://www.sloansportsconference.com/research-papers/learning-feature-representations-from-football-tracking
 
-https://www.sloansportsconference.com/research-papers/deepqb-deep-learning-with-player-tracking-to-quantify-quarterback-decision-making-performance
+15. https://www.sloansportsconference.com/research-papers/deepqb-deep-learning-with-player-tracking-to-quantify-quarterback-decision-making-performance
